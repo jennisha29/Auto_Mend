@@ -1,0 +1,125 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: python scripts/download/stack_iac_sample.py
+    deps:
+    - path: config/iac_analysis.yaml
+      hash: md5
+      md5: 763bc419f9848feef85843547e6af2f4
+      size: 5055
+    - path: scripts/download/stack_iac_sample.py
+      hash: md5
+      md5: 72159fadb8a5c774cca62d317b7014db
+      size: 2867
+    outs:
+    - path: data/raw
+      hash: md5
+      md5: cd92e8f781ab6f43516d6d61dfca82e3.dir
+      size: 35642564
+      nfiles: 20
+  analyze:
+    cmd: python scripts/analyze/stack_iac_analysis.py
+    deps:
+    - path: config/iac_analysis.yaml
+      hash: md5
+      md5: 763bc419f9848feef85843547e6af2f4
+      size: 5055
+    - path: data/raw
+      hash: md5
+      md5: cd92e8f781ab6f43516d6d61dfca82e3.dir
+      size: 35642564
+      nfiles: 20
+    - path: scripts/analyze/stack_iac_analysis.py
+      hash: md5
+      md5: ce944ae2136f643fb4e91493b5712ca2
+      size: 5778
+    outs:
+    - path: logs/analysis_report.json
+      hash: md5
+      md5: 5155f51c3dcd5466212de650d6dd6aba
+      size: 1191
+  preprocess:
+    cmd: python scripts/preprocess/payload_pipeline.py
+    deps:
+    - path: config/iac_analysis.yaml
+      hash: md5
+      md5: 763bc419f9848feef85843547e6af2f4
+      size: 5055
+    - path: data/raw
+      hash: md5
+      md5: cd92e8f781ab6f43516d6d61dfca82e3.dir
+      size: 35642564
+      nfiles: 20
+    - path: scripts/preprocess/payload_pipeline.py
+      hash: md5
+      md5: 97c498e286d9b9e8b2edac48f11b1c00
+      size: 4935
+    - path: scripts/preprocess/payload_preprocess.py
+      hash: md5
+      md5: 6375f3210eb484c6ffe4cc5cae993edf
+      size: 9969
+    outs:
+    - path: data/processed/training_records.jsonl
+      hash: md5
+      md5: 8eb60b50542fe26b95b0eec56898d8c6
+      size: 248821
+  validate:
+    cmd: python scripts/validate/schema_stats.py
+    deps:
+    - path: config/iac_analysis.yaml
+      hash: md5
+      md5: 763bc419f9848feef85843547e6af2f4
+      size: 5055
+    - path: data/processed/training_records.jsonl
+      hash: md5
+      md5: 8eb60b50542fe26b95b0eec56898d8c6
+      size: 248821
+    - path: scripts/validate/schema_stats.py
+      hash: md5
+      md5: 44642a6a00f9f9b92dd11ff35d2f61b9
+      size: 6851
+    outs:
+    - path: logs/schema_report.json
+      hash: md5
+      md5: 44229d239c5f8cd12923c1528f7af242
+      size: 522
+  anomaly_check:
+    cmd: python scripts/validate/anomaly_alerts.py
+    deps:
+    - path: config/iac_analysis.yaml
+      hash: md5
+      md5: 763bc419f9848feef85843547e6af2f4
+      size: 5055
+    - path: logs/schema_report.json
+      hash: md5
+      md5: 44229d239c5f8cd12923c1528f7af242
+      size: 522
+    - path: scripts/validate/anomaly_alerts.py
+      hash: md5
+      md5: 452a3fcac97b33daaa636a148df21e85
+      size: 5261
+    outs:
+    - path: logs/anomaly_report.json
+      hash: md5
+      md5: 92f38922374aa573e7cdc23283dccf3e
+      size: 212
+  bias_detection:
+    cmd: python scripts/validate/bias_detection.py
+    deps:
+    - path: config/iac_analysis.yaml
+      hash: md5
+      md5: 763bc419f9848feef85843547e6af2f4
+      size: 5055
+    - path: data/processed/training_records.jsonl
+      hash: md5
+      md5: 8eb60b50542fe26b95b0eec56898d8c6
+      size: 248821
+    - path: scripts/validate/bias_detection.py
+      hash: md5
+      md5: ec91cfd48effd2f6bfa248efd11daca5
+      size: 7362
+    outs:
+    - path: logs/bias_report.json
+      hash: md5
+      md5: d870fb7a074103b92b1d0773db143a80
+      size: 2958
