@@ -1,0 +1,118 @@
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+pytestdebug.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# =============================================================================
+# OS / Editor
+# =============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =============================================================================
+# Airflow (local/dev)
+# =============================================================================
+airflow.db
+airflow-webserver.pid
+*.log
+airflow_home/
+AIRFLOW_HOME/
+
+# =============================================================================
+# Data artifacts (DON'T commit raw/processed outputs)
+# =============================================================================
+data/raw/
+data/processed/
+*.parquet
+*.jsonl
+tmp_test_out.jsonl
+
+# Keep directory structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# =============================================================================
+# HuggingFace / datasets / cache
+# =============================================================================
+.hf_cache/
+.cache/
+**/.cache/huggingface/
+**/.cache/hf/
+**/.huggingface/
+
+# =============================================================================
+# Logs / reports (keep structure, not generated content)
+# =============================================================================
+logs/*
+!logs/.gitkeep
+!logs/analysis_report.json
+!logs/pipeline_run.json
+!logs/schema_report.json
+!logs/anomaly_report.json
+!logs/bias_report.json
+
+# =============================================================================
+# DVC
+# =============================================================================
+# Keep: dvc.yaml, .dvc/config, .dvc/.gitignore
+# Ignore: local cache and temp files only
+.dvc/cache/
+.dvc/tmp/
+.dvc/logs/
+.dvc/state
+.dvc/plots/
+
+# =============================================================================
+# Build / dist
+# =============================================================================
+build/
+dist/
+*.egg-info/
+
+# =============================================================================
+# Secrets (never commit)
+# =============================================================================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+
+# =============================================================================
+# Archives
+# =============================================================================
+*.zip
+*.tar.gz
+*.tgz

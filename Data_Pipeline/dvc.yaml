@@ -1,0 +1,54 @@
+stages:
+  download:
+    cmd: python scripts/download/stack_iac_sample.py
+    deps:
+      - scripts/download/stack_iac_sample.py
+      - config/iac_analysis.yaml
+    outs:
+      - data/raw
+
+  analyze:
+    cmd: python scripts/analyze/stack_iac_analysis.py
+    deps:
+      - scripts/analyze/stack_iac_analysis.py
+      - config/iac_analysis.yaml
+      - data/raw
+    outs:
+      - logs/analysis_report.json
+
+  preprocess:
+    cmd: python scripts/preprocess/payload_pipeline.py
+    deps:
+      - scripts/preprocess/payload_pipeline.py
+      - scripts/preprocess/payload_preprocess.py
+      - config/iac_analysis.yaml
+      - data/raw
+    outs:
+      - data/processed/training_records.jsonl
+
+  validate:
+    cmd: python scripts/validate/schema_stats.py
+    deps:
+      - scripts/validate/schema_stats.py
+      - config/iac_analysis.yaml
+      - data/processed/training_records.jsonl
+    outs:
+      - logs/schema_report.json
+
+  anomaly_check:
+    cmd: python scripts/validate/anomaly_alerts.py
+    deps:
+      - scripts/validate/anomaly_alerts.py
+      - config/iac_analysis.yaml
+      - logs/schema_report.json
+    outs:
+      - logs/anomaly_report.json
+
+  bias_detection:
+    cmd: python scripts/validate/bias_detection.py
+    deps:
+      - scripts/validate/bias_detection.py
+      - config/iac_analysis.yaml
+      - data/processed/training_records.jsonl
+    outs:
+      - logs/bias_report.json

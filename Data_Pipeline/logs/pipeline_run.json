@@ -1,0 +1,15 @@
+{
+  "total": 20000,
+  "drop_not_k8s": 15120,
+  "drop_too_small": 3585,
+  "drop_missing_kind": 112,
+  "drop_not_ml_infra": 565,
+  "drop_invalid_yaml": 445,
+  "written": 43,
+  "drop_too_large": 36,
+  "drop_missing_metadata": 65,
+  "drop_bad_extension": 10,
+  "drop_invalid_yaml_post_redaction": 1,
+  "drop_bad_license": 9,
+  "drop_low_alphanum": 9
+}

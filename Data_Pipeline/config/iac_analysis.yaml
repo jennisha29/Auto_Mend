@@ -1,0 +1,129 @@
+# ── Dataset ───────────────────────────────────────────────────────────────────
+dataset:
+  repo: "bigcode/the-stack-dedup"
+  lang: "yaml"
+  split: "train"
+  streaming: true
+
+# ── Sampling / chunking ───────────────────────────────────────────────────────
+sampling:
+  sample_size: 20000
+  chunk_size: 1000
+  seed: 42
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+paths:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  logs_dir: "logs"
+  analysis_out: "logs/analysis_report.json"
+  pipeline_log: "logs/pipeline_run.json"
+
+# ── Fields to pull from HuggingFace ──────────────────────────────────────────
+fields:
+  content: "content"
+  ext: "ext"
+  lang: "lang"
+  size: "size"
+  avg_line_length: "avg_line_length"
+  max_line_length: "max_line_length"
+  alphanum_fraction: "alphanum_fraction"
+  hexsha: "hexsha"
+  repo_path: "max_stars_repo_path"
+  repo_name: "max_stars_repo_name"
+  repo_licenses: "max_stars_repo_licenses"
+  repo_path_issues: "max_issues_repo_path"
+  repo_path_forks: "max_forks_repo_path"
+  repo_licenses_issues: "max_issues_repo_licenses"
+  repo_licenses_forks: "max_forks_repo_licenses"
+
+# ── Filters ───────────────────────────────────────────────────────────────────
+filters:
+  min_size_bytes: 200
+  max_size_bytes: 500000
+  min_alphanum_frac: 0.25
+  allowed_exts: ["yaml", "yml"]
+
+  # Kubernetes gates
+  require_api_version: true
+  require_kind: true
+  require_metadata: true
+  valid_yaml_only: true
+
+  # License enforcement
+  require_license: true
+  permissive_licenses:
+    - "mit"
+    - "apache-2.0"
+    - "bsd-2-clause"
+    - "bsd-3-clause"
+    - "isc"
+    - "cc0-1.0"
+    - "unlicense"
+    - "wtfpl"
+    - "0bsd"
+
+  # Strict ML infra — must have K8s gates AND an ML keyword
+  require_ml_infra: true
+  ml_infra_mode: "strict"
+  ml_infra_groups: ["ml_gpu", "kserve_seldon", "mlops"]
+
+# ── PII redaction ─────────────────────────────────────────────────────────────
+# Patterns are deliberately anchored/tightened to avoid false positives:
+#   ipv4   — requires word boundary so "1.2.3" in a version string won't fire,
+#             but "10.0.0.1" standing alone will.
+#   email  — requires a word boundary before the local part and rejects
+#             Kubernetes API group paths (e.g. "apps/v1", "vertica.com/v1beta1")
+#             by asserting no preceding slash.
+#   api_key — unchanged: sk- followed by 20+ alphanumerics.
+#   creds   — unchanged: password/token/api_key/secret key=value pairs.
+redaction:
+  patterns:
+    ipv4: '\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b'
+    email: '(?<![/\w])[\w.+-]{2,}@[\w-]+\.[\w.-]+'
+    api_key: "sk-[A-Za-z0-9]{20,}"
+    creds: '(password|token|api_key|secret)\s*[:=]\s*\S+'
+  replacements:
+    ipv4: "IPV4_REDACTED"
+    email: "EMAIL_REDACTED"
+    api_key: "sk-REDACTED"
+    creds: '\1: REDACTED'
+
+# ── Keyword taxonomy (ML infra focus) ────────────────────────────────────────
+keywords:
+  ml_gpu:
+    - "nvidia.com/gpu"
+    - "amd.com/gpu"
+    - "accelerator"
+    - "gpu"
+  kserve_seldon:
+    - "kserve"
+    - "seldon"
+    - "inferenceservice"
+    - "servingruntime"
+    - "seldondeployment"
+    - "predictor"
+    - "storageuri"
+  mlops:
+    - "kubeflow"
+    - "mlflow"
+    - "inference"
+    - "serving"
+    - "pipeline"
+    - "workflow"
+
+# ── Prompt synthesis rules ────────────────────────────────────────────────────
+prompt_rules:
+  - { match: "deploy", template: "Deploy the {slug} configuration" }
+  - { match: "service", template: "Apply the {slug} service manifest" }
+  - { match: "inference", template: "Set up the {slug} inference workload" }
+  - { match: "gpu", template: "Provision a GPU workload for {slug}" }
+  - { match: "train", template: "Submit the {slug} training job" }
+  - { match: "pipeline", template: "Run the {slug} pipeline" }
+  - { match: "ingress", template: "Configure ingress for {slug}" }
+  - { match: "secret", template: "Apply the {slug} secret manifest" }
+  - { match: "config", template: "Apply the {slug} configuration" }
+  - {
+      match: "*",
+      template: "Apply the following Kubernetes manifest for {slug}",
+    }

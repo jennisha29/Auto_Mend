@@ -1,0 +1,26 @@
+# Core
+datasets>=2.18.0
+pyarrow>=15.0.0
+pyyaml>=6.0
+tqdm>=4.66.0
+huggingface_hub>=0.22.0
+
+# Orchestration
+apache-airflow>=2.8.0
+
+# Data versioning
+dvc>=3.40.0
+
+# Schema & statistics
+great-expectations>=0.18.0
+
+# Bias detection / slicing
+pandas>=2.0.0
+numpy>=1.26.0
+
+# Alerts
+requests>=2.31.0          # Slack webhook
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=5.0.0
