@@ -1,0 +1,9 @@
+[run]
+source = scripts
+omit =
+    scripts/diagnostic.py
+
+[report]
+exclude_lines =
+    raise NotImplementedError
+    @abstractmethod
