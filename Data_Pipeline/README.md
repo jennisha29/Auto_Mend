@@ -69,6 +69,20 @@ Final output per record:
 
 ---
 
+## Test Modules
+
+- We wrote comprehensive unit tests to validate the core functionality of every module in the pipeline — `stack_iac_sample.py`, `payload_preprocess.py`, `schema_stats.py`, `anomaly_alerts.py`, and `bias_detection.py`.
+- All tests are written with `pytest`, use no temporary files or directories, and run independently without needing any external data, network access, or HuggingFace credentials.
+- Additional validation is done via `scripts/diagnostic.py` — run manually after download to verify filter yield, keyword coverage, PII exposure, and JSON escaping correctness end-to-end.
+
+```bash
+pytest tests/test_pipeline.py -v
+```
+
+Tests cover: filter gates, PII redaction, prompt synthesis, JSON escaping, schema validation, anomaly checks, bias classifiers, and the full end-to-end row transform.
+
+---
+
 ## Pipeline Orchestration (Airflow DAG)
 
 The entire pipeline runs as a single Airflow DAG: `iac_payload_pipeline`
@@ -79,7 +93,7 @@ download → analyze → preprocess → validate → anomaly_check → bias_dete
 
 - **Manual trigger only** — no scheduled runs
 - All 6 tasks use `PythonOperator`
-- Total runtime: ~48 seconds (download is the bottleneck at ~21s — network-bound)
+- Total runtime: ~48 seconds
 
 ![Airflow DAGs graph](docs/airflow_dag_graph.png)
 
@@ -196,18 +210,6 @@ Output `logs/bias_report.json`:
   }
 }
 ```
-
----
-
-## Test Modules
-
-```bash
-pytest tests/test_pipeline.py -v
-```
-
-**139 tests, 63% coverage** — all pure logic functions covered. No network access, no files needed.
-
-Tests cover: filter gates, PII redaction, prompt synthesis, JSON escaping, schema validation, anomaly checks, bias classifiers, and the full end-to-end row transform.
 
 ---
 
