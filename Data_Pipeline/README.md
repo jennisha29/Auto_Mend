@@ -1,4 +1,4 @@
-# AutoMend — IaC Payload Layer Data Pipeline
+# AutoMend — Data Pipeline
 
 AutoMend trains a language model to automatically fix and deploy Kubernetes infrastructure by learning from real-world configuration files.
 
