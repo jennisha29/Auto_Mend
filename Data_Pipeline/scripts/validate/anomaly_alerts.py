@@ -1,6 +1,4 @@
 """
-anomaly_alerts.py
-──────────────────
 Reads logs/schema_report.json and fires alerts when thresholds are breached.
 
 Anomalies checked:
@@ -33,8 +31,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Thresholds ─────────────────────────────────────────────────────────────────
-
+# alert thresholds
 THRESHOLDS = {
     "min_pass_rate_pct":     80.0,   # alert if <80% of records are valid
     "max_violation_count":   50,     # alert if any single violation exceeds this
@@ -42,11 +39,10 @@ THRESHOLDS = {
     "min_total_records":     10,     # alert if fewer than 10 records written
 }
 
-
-# ── Alert dispatch ────────────────────────────────────────────────────────────
-
+# alert sender
 def send_alert(message: str) -> None:
     """Send to Slack if webhook is set, else log as CRITICAL."""
+
     log.critical("ANOMALY ALERT: %s", message)
     webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
     if webhook:
@@ -65,18 +61,19 @@ def send_alert(message: str) -> None:
     else:
         log.warning("SLACK_WEBHOOK_URL not set — alert logged only")
 
-
-# ── Anomaly checks (pure functions) ──────────────────────────────────────────
-
+# anomaly checks
 def check_pass_rate(report: dict, threshold: float) -> tuple[bool, str]:
+    """Alert if the percentage of valid records is too low."""
+
     rate = report.get("pass_rate_pct", 0)
     if rate < threshold:
         return True, (f"Pass rate {rate:.1f}% is below minimum "
                       f"{threshold:.1f}%")
     return False, ""
 
-
 def check_pii_leakage(report: dict, max_allowed: int) -> tuple[bool, str]:
+    """Alert if any PII was found in the output training data."""
+
     violations = report.get("violation_counts", {})
     pii_keys   = [k for k in violations if k.startswith("pii_leaked")]
     total_pii  = sum(violations[k] for k in pii_keys)
@@ -84,23 +81,22 @@ def check_pii_leakage(report: dict, max_allowed: int) -> tuple[bool, str]:
         return True, f"PII leakage detected in {total_pii} records: {pii_keys}"
     return False, ""
 
-
 def check_violation_count(report: dict, max_count: int) -> tuple[bool, str]:
+    """Alert if any single violation type happened too many times."""
+
     violations = report.get("violation_counts", {})
     over = {k: v for k, v in violations.items() if v > max_count}
     if over:
         return True, f"Violation counts exceed threshold {max_count}: {over}"
     return False, ""
 
-
 def check_minimum_records(report: dict, minimum: int) -> tuple[bool, str]:
+    """Alert if too few training records were written."""
+
     total = report.get("total", 0)
     if total < minimum:
         return True, f"Only {total} records found — expected at least {minimum}"
     return False, ""
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def run_anomaly_check() -> dict:
     report_path = _ROOT / "logs/schema_report.json"
@@ -118,7 +114,7 @@ def run_anomaly_check() -> dict:
         check_violation_count(report,  THRESHOLDS["max_violation_count"]),
         check_minimum_records(report,  THRESHOLDS["min_total_records"]),
     ]
-
+    # fires an alert for every check that failed
     for triggered, message in checks:
         if triggered:
             anomalies.append(message)

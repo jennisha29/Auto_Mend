@@ -1,6 +1,5 @@
 """
-tests/test_pipeline.py
-───────────────────────
+
 Full test suite — every function in every script.
 
   - payload_preprocess.py  (passes_filter, _k8s_ok, redact, synthesize_prompt,
@@ -13,17 +12,12 @@ Full test suite — every function in every script.
   - bias_detection.py      (classify_iac_type, classify_size_bucket,
                              classify_prompt_type, classify_license,
                              build_slices, summarise_slices, detect_imbalances)
-
-No network. No HuggingFace. No parquet. No files written to disk.
-
-Usage:
-    pytest tests/test_pipeline.py -v
 """
 
-import copy
 import json
 import re
 import sys
+import copy
 import yaml
 import pytest
 from pathlib import Path
@@ -52,10 +46,7 @@ from scripts.validate.bias_detection import (
     build_slices, summarise_slices, detect_imbalances,
 )
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Shared fixtures
-# ═════════════════════════════════════════════════════════════════════════════
-
+# a kubernetes deployment manifest with a GPU resource limit
 VALID_YAML = """\
 apiVersion: apps/v1
 kind: Deployment
@@ -83,6 +74,7 @@ spec:
               cpu: "2"
 """
 
+# KServe InferenceService manifest
 KSERVE_YAML = """\
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
@@ -95,10 +87,8 @@ spec:
       storageUri: "gs://kfserving-examples/models/sklearn/1.0/model"
 """
 
-# Unclosed flow sequence — raises yaml.scanner.ScannerError on ALL PyYAML
-# versions. Contains apiVersion so it clears the not_k8s gate.
-# passes_filter checks valid_yaml BEFORE ml_infra so this correctly
-# returns "invalid_yaml" rather than "not_ml_infra".
+# A broken YAML file
+# testing if the invalid YAML is correctly rejected.
 INVALID_YAML = (
     "apiVersion: apps/v1\n"
     "kind: Deployment\n"
@@ -109,7 +99,7 @@ INVALID_YAML = (
     "  replicas: 2\n"
 )
 
-# No apiVersion → not_k8s
+# gitHub Actions file as not Kubernetes, should be rejected by the K8s gate
 NON_K8S_YAML = """\
 name: my-ci-pipeline
 on: [push]
@@ -120,7 +110,7 @@ jobs:
       - uses: actions/checkout@v3
 """
 
-# Valid K8s but no ML keyword → not_ml_infra
+# kubernetes file but with no ML keywords, should be rejected by the ML gate
 K8S_NO_ML_YAML = """\
 apiVersion: v1
 kind: ConfigMap
@@ -133,24 +123,24 @@ data:
   third: entry
 """
 
-
 @pytest.fixture
 def cfg():
+    """Load the real config file"""
     return yaml.safe_load((ROOT / "config/iac_analysis.yaml").read_text())
-
 
 @pytest.fixture
 def redactors(cfg):
+    """Build compiled PII regex patterns from config."""
     return build_redactors(cfg)
-
 
 @pytest.fixture
 def prompt_rules(cfg):
+    """Load the filename-to-prompt rules from config."""
     return build_prompt_rules(cfg)
-
 
 def _row(content=VALID_YAML, size=None, af=0.6, licenses=None,
          hexsha="abc123", path="gpu-deployment.yaml", ext="yaml"):
+    """A minimal raw row dict with the same shape as a row from The Stack."""
     return {
         "content":                  content,
         "size":                     size if size is not None else len(content),
@@ -170,7 +160,7 @@ def _make_record(prompt="Deploy gpu config",
                  manifest=VALID_YAML,
                  hexsha="abc", path="gpu.yaml", size=500,
                  licenses=None):
-    """Build a valid training record dict."""
+    """A valid training record with the same shape as a record in training_records.jsonl."""
     return {
         "messages": [
             {"role": "user",      "content": prompt},
@@ -190,11 +180,9 @@ def _make_record(prompt="Deploy gpu config",
 
 def _safe_ml_keyword(cfg: dict) -> str:
     """
-    Return the first ML keyword from config that is a plain identifier
-    (matches ^[a-zA-Z][a-zA-Z0-9_-]*$) so it can be safely used as an
-    unquoted YAML key in generated test content.
-    Keywords like 'nvidia.com/gpu' contain '.' and '/' which are illegal
-    in bare YAML keys and cause yaml.safe_load to raise invalid_yaml.
+    Return an ML keyword that is safe to embed as a YAML key in test content.
+    avoid keywords like 'nvidia.com/gpu' (contains dots and slashes)
+    as they break yaml.safe_load when used as unquoted keys.
     """
     groups = cfg["filters"].get("ml_infra_groups", [])
     for group in groups:
@@ -205,11 +193,6 @@ def _safe_ml_keyword(cfg: dict) -> str:
         "No plain-identifier ML keyword found in config — "
         "check ml_infra_groups and keywords sections"
     )
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 1. passes_filter
-# ═════════════════════════════════════════════════════════════════════════════
 
 class TestPassesFilter:
 
@@ -230,22 +213,23 @@ class TestPassesFilter:
         assert not ok and r == "too_large"
 
     def test_low_alphanum(self, cfg):
+        # file is mostly binary and whitespace not useful in training data
         ok, r = passes_filter(_row(af=0.10), cfg)
         assert not ok and r == "low_alphanum"
 
     def test_bad_extension(self, cfg):
+        # only want .yaml/.yml files
         ok, r = passes_filter(_row(ext="json"), cfg)
         assert not ok and r == "bad_extension"
 
     def test_non_k8s(self, cfg):
+         # GitHub Actions file with no apiVersion, rejected as not Kubernetes.
         min_size = cfg["filters"]["min_size_bytes"]
         ok, r = passes_filter(_row(content=NON_K8S_YAML, size=min_size + 1), cfg)
         assert not ok and r == "not_k8s"
 
     def test_invalid_yaml(self, cfg):
-        # Size padded above min_size_bytes so filter reaches yaml validity check.
-        # INVALID_YAML has an unclosed flow sequence → guaranteed ScannerError.
-        # passes_filter checks valid_yaml BEFORE ml_infra.
+        # unclosed bracket so yaml.safe_load fails is rejected
         min_size = cfg["filters"]["min_size_bytes"]
         ok, r = passes_filter(_row(content=INVALID_YAML, size=min_size + 1), cfg)
         assert not ok and r == "invalid_yaml"
@@ -255,20 +239,24 @@ class TestPassesFilter:
         assert not ok and r == "missing_license"
 
     def test_bad_license(self, cfg):
+        # GPL is not in the permissive license allowlist
         ok, r = passes_filter(_row(licenses=["GPL-3.0"]), cfg)
         assert not ok and r == "bad_license"
 
     def test_no_ml_keyword(self, cfg):
+        # valid K8s ConfigMap but no ML keywords so rejected
         min_size = cfg["filters"]["min_size_bytes"]
         ok, r = passes_filter(_row(content=K8S_NO_ML_YAML,
                                    size=min_size + 1), cfg)
         assert not ok and r == "not_ml_infra"
 
     def test_multiple_licenses_one_permissive(self, cfg):
+        # if any license is permissive, the file passes
         ok, _ = passes_filter(_row(licenses=["GPL-3.0", "MIT"]), cfg)
         assert ok
 
     def test_all_permissive_licenses(self, cfg):
+         # every license in the allowlist should pass
         for lic in cfg["filters"]["permissive_licenses"]:
             ok, reason = passes_filter(_row(licenses=[lic]), cfg)
             assert ok, f"{lic!r} should pass but got: {reason}"
@@ -280,17 +268,13 @@ class TestPassesFilter:
         assert ok and r == "ok"
 
     def test_ml_infra_strict_requires_both_k8s_and_keyword(self, cfg):
+        # must be both a K8s manifest and contain an ML keyword
         min_size = cfg["filters"]["min_size_bytes"]
         ok, r = passes_filter(_row(content=K8S_NO_ML_YAML,
                                    size=min_size + 1), cfg)
         assert not ok and r == "not_ml_infra"
 
     def test_require_api_version_false_relaxes_has_k8s(self, cfg):
-        # When require_api_version is off, _k8s_ok returns True even without
-        # apiVersion, so an ML keyword alone is sufficient in strict mode.
-        # _safe_ml_keyword() picks a plain-identifier keyword (no dots/slashes)
-        # so the generated content passes yaml.safe_load without issue.
-        # Content includes kind + metadata to satisfy any other enabled K8s gates.
         cfg2 = copy.deepcopy(cfg)
         cfg2["filters"]["require_api_version"] = False
         kw      = _safe_ml_keyword(cfg2)
@@ -326,11 +310,13 @@ class TestPassesFilter:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 2. _k8s_ok — unit tests for the shared K8s gate helper
+#  unit tests for the Kubernetes detection
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestK8sOk:
-
+    """
+    _k8s_ok() checks whether a file looks like a Kubernetes manifest.
+    """
     def _f(self, api=False, kind=False, meta=False) -> dict:
         return {
             "require_api_version": api,
@@ -369,8 +355,6 @@ class TestK8sOk:
                         self._f(api=True, kind=True, meta=True)) is False
 
     def test_ml_infra_strict_uses_all_gates(self, cfg):
-        # Strict ML mode must reject content that has an ML keyword
-        # but fails the K8s gate (missing metadata) when require_metadata=True.
         cfg2 = copy.deepcopy(cfg)
         cfg2["filters"]["require_kind"]     = True
         cfg2["filters"]["require_metadata"] = True
@@ -388,7 +372,7 @@ class TestK8sOk:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 3. redact
+# 3. redact PII removal
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestRedact:
@@ -424,12 +408,12 @@ class TestRedact:
         assert out.count("IPV4_REDACTED") == 2
 
     def test_yaml_structure_preserved(self, redactors):
+        # after redaction, the YAML must parse correctly
         dirty = VALID_YAML + "\n  # admin@corp.com\n  # 10.0.0.5\n"
-        yaml.safe_load(redact(dirty, redactors))    # must not raise
-
+        yaml.safe_load(redact(dirty, redactors))
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 4. synthesize_prompt
+# synthesize_prompt
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestSynthesizePrompt:
@@ -460,6 +444,7 @@ class TestSynthesizePrompt:
         assert len(synthesize_prompt("", prompt_rules)) > 0
 
     def test_extension_stripped(self, prompt_rules):
+        # the .yaml extension should not appear in the prompt
         assert ".yaml" not in synthesize_prompt("my-deploy.yaml", prompt_rules)
 
     def test_underscores_to_spaces(self, prompt_rules):
@@ -471,6 +456,11 @@ class TestSynthesizePrompt:
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestWrap:
+    """
+    wrap() packages a YAML string into the apply_manifest tool-call format.
+    The key guarantee: the YAML must survive a round-trip through JSON
+    and still be valid YAML.
+    """
 
     def test_valid_json(self):
         assert json.loads(wrap(VALID_YAML))["tool"] == "apply_manifest"
@@ -499,10 +489,14 @@ class TestWrap:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 6. process_row (end-to-end)
+# 6. processed Row
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestProcessRow:
+    """
+    process_row() runs all 5 steps on one raw row:
+    filter, redact, re-validate, synthesize prompt and wrap
+    """
 
     def test_valid(self, cfg, redactors, prompt_rules):
         record, status = process_row(_row(), cfg, redactors, prompt_rules)
@@ -527,10 +521,12 @@ class TestProcessRow:
         assert "_meta" in record and "hexsha" in record["_meta"]
 
     def test_rejected_returns_none(self, cfg, redactors, prompt_rules):
+        # empty content should be rejected
         record, status = process_row(_row(content=""), cfg, redactors, prompt_rules)
         assert record is None and status != "ok"
 
     def test_pii_stripped(self, cfg, redactors, prompt_rules):
+        # email in a comment should be removed before the record is written
         dirty = VALID_YAML + "\n# ops@company.com\n"
         record, _ = process_row(_row(content=dirty, size=len(dirty)),
                                 cfg, redactors, prompt_rules)
@@ -560,6 +556,8 @@ class TestProcessRow:
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestIacType:
+    """iac_type() identifies what kind of infrastructure file this is."""
+
     def test_kserve(self):    assert iac_type(KSERVE_YAML) == "kserve"
     def test_seldon(self):    assert iac_type("apiVersion: v1\nkind: SeldonDeployment") == "seldon"
     def test_deployment(self):assert iac_type(VALID_YAML) == "k8s_workload"
@@ -573,19 +571,19 @@ class TestIacType:
 
 
 class TestEscapeDifficulty:
+    """escape_difficulty() estimates how hard a file would be to JSON-escape."""
 
     def test_easy(self):
         assert escape_difficulty("replicas: 3") == "easy"
 
     def test_medium(self):
-        # score = newlines(1) + quotes*2(2) = 4 per repeat → need >1000 → 260 repeats
         assert escape_difficulty(('key: "v"\n') * 260) in ("medium", "hard")
 
     def test_hard(self):
         assert escape_difficulty(('"x"\n\\p\\\n') * 500) == "hard"
 
-
 class TestHasPii:
+    """has_pii() returns True if the file contains any PII."""
     def test_ip(self):             assert has_pii("host: 10.0.0.1")
     def test_api_key(self):        assert has_pii("key: sk-abcdefghijklmnopqrstuvwxyz")
     def test_email(self):          assert has_pii("a: user@example.com")
@@ -595,6 +593,7 @@ class TestHasPii:
 
 
 class TestKeywordHits:
+    """keyword_hits() counts how many times each ML keyword appears."""
 
     def test_gpu_counted(self):
         assert keyword_hits(VALID_YAML)["ml_gpu"]["nvidia.com/gpu"] >= 1
@@ -607,6 +606,8 @@ class TestKeywordHits:
 
 
 class TestSizeBucket:
+    """size_bucket() puts a file into a size category."""
+
     def test_tiny(self):   assert size_bucket(500)     == "<1KB"
     def test_small(self):  assert size_bucket(5_000)   == "1-10KB"
     def test_medium(self): assert size_bucket(50_000)  == "10-100KB"
@@ -614,10 +615,11 @@ class TestSizeBucket:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 8. schema_stats — validate_record + compute_stats
+# 8. schema_stats
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestValidateRecord:
+    """validate_record() checks one training record against all schema rules."""
 
     def test_valid_record_passes(self):
         ok, violations = validate_record(_make_record())
@@ -640,6 +642,7 @@ class TestValidateRecord:
         assert not ok and any("wrong_message_count" in x for x in v)
 
     def test_wrong_role_order(self):
+        # first message must be from the user
         r = _make_record()
         r["messages"][0]["role"] = "assistant"
         ok, v = validate_record(r)
@@ -651,12 +654,14 @@ class TestValidateRecord:
         assert not ok and any("empty_prompt" in x for x in v)
 
     def test_invalid_json_in_assistant(self):
+        # assistant content must be valid JSON
         r = _make_record()
         r["messages"][1]["content"] = "not json {"
         ok, v = validate_record(r)
         assert not ok and any("invalid_json" in x for x in v)
 
     def test_wrong_tool_name(self):
+        # apply_manifest tool must be used
         r = _make_record()
         content = json.loads(r["messages"][1]["content"])
         content["tool"] = "wrong_tool"
@@ -665,6 +670,7 @@ class TestValidateRecord:
         assert not ok and any("wrong_tool_name" in x for x in v)
 
     def test_invalid_yaml_manifest(self):
+        # the manifest inside must be valid YAML
         r = _make_record(manifest=": broken: [")
         ok, v = validate_record(r)
         assert not ok and any("invalid_yaml" in x for x in v)
@@ -686,6 +692,7 @@ class TestValidateRecord:
 
 
 class TestComputeStats:
+    """compute_stats() calculates summary statistics over a list of valid records."""
 
     def test_stats_keys_present(self):
         stats = compute_stats([_make_record() for _ in range(3)])
@@ -705,10 +712,15 @@ class TestComputeStats:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 9. anomaly_alerts — pure check functions
+# 9. anomaly_alerts — threshold check functions
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestAnomalyChecks:
+    """
+    Each check function takes a report dict and a threshold.
+    Returns (triggered=True, message) if the threshold is breached.
+    Returns (triggered=False, "") if everything is fine.
+    """
 
     def _report(self, pass_rate=95.0, violations=None, total=100):
         return {
@@ -771,10 +783,11 @@ class TestAnomalyChecks:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 10. bias_detection — slice classifiers + analysis
+# 10. bias_detection
 # ═════════════════════════════════════════════════════════════════════════════
 
 class TestSliceClassifiers:
+    """Each classifier puts a record into one of several named categories."""
 
     def test_kserve(self):    assert classify_iac_type(KSERVE_YAML) == "kserve"
     def test_deployment(self):assert classify_iac_type(VALID_YAML)  == "k8s_workload"
@@ -802,6 +815,7 @@ class TestSliceClassifiers:
 
 
 class TestBuildSlices:
+    """build_slices() groups records into buckets across all 4 dimensions."""
 
     def test_slices_have_four_dimensions(self):
         slices = build_slices([_make_record() for _ in range(5)])
@@ -823,6 +837,7 @@ class TestBuildSlices:
 
 
 class TestSummariseSlices:
+    """summarise_slices() converts counts into percentages and adds imbalance flags."""
 
     def test_pct_sums_to_100(self):
         records = [_make_record() for _ in range(10)]
@@ -842,6 +857,7 @@ class TestSummariseSlices:
 
 
 class TestDetectImbalances:
+    """detect_imbalances() returns plain english messages for any flagged categories."""
 
     def test_no_imbalances_when_single_slice(self):
         records = [_make_record() for _ in range(10)]
@@ -849,7 +865,6 @@ class TestDetectImbalances:
         assert isinstance(detect_imbalances(summary), list)
 
     def test_imbalance_message_contains_dimension(self):
-        # deploy=1/100=1% → flagged as underrepresented
         records = (
             [_make_record(prompt="Deploy config")] +
             [_make_record(prompt="Provision GPU workload") for _ in range(99)]

@@ -1,6 +1,4 @@
 """
-diagnostic.py
-──────────────
 Reads whatever parquet chunks exist in data/raw/ and produces a
 human-readable report covering:
 
@@ -11,11 +9,7 @@ human-readable report covering:
   5. Spec compliance check — explicit pass/fail for every requirement
      in "The Stack: The Payload Layer" spec
 
-Run AFTER stack_iac_sample.py has written at least one chunk.
-No network needed.
-
-Usage:
-    python scripts/diagnostic.py
+Run after the stack_iac_sample.py has written at least one chunk.
 """
 
 import re
@@ -28,6 +22,7 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
+# finds the repo root and loads config
 _ROOT = Path(__file__).resolve().parents[1]  # .../Data_Pipeline/scripts/diagnostic.py -> Data_Pipeline/
 sys.path.insert(0, str(_ROOT))
 
@@ -42,12 +37,12 @@ from scripts.analyze.stack_iac_analysis import keyword_hits, iac_type, has_pii
 REDACTORS    = build_redactors(CFG)
 PROMPT_RULES = build_prompt_rules(CFG)
 
-# ── Scan ──────────────────────────────────────────────────────────────────────
+# checks if parquet files exist
 chunks = sorted(RAW.glob("chunk_*.parquet"))
 if not chunks:
-    sys.exit(f"❌  No parquet chunks in {RAW} — run stack_iac_sample.py first.")
+    sys.exit(f"No parquet chunks in {RAW} — run stack_iac_sample.py first.")
 
-# Counters
+# counters
 total          = 0
 filter_pass    = 0
 filter_drops   = Counter()
@@ -56,36 +51,36 @@ iac_types      = Counter()
 pii_by_type    = Counter()          # which PII pattern fired
 wrap_ok        = 0                  # json+yaml round-trip passed
 wrap_fail      = 0
-sample_records = []                 # keep first 3 valid records for spot-check
+sample_records = []                 # keeps first 3 valid records
 
 PII_PATTERNS = {k: re.compile(v) for k, v in CFG["redaction"]["patterns"].items()}
 
+# scanning every row in every parquet chunk
 for chunk_path in tqdm(chunks, desc="Scanning chunks"):
     for row in pq.read_table(chunk_path).to_pylist():
         total += 1
         content = row.get("content") or ""
 
-        # ── Keyword hits (all rows, pre-filter) ───────────────────────────
+        # counts keyword hits across all rows
         for cat, counts in keyword_hits(content).items():
             for w, n in counts.items():
                 if n:
                     kw_totals[cat][w] += n
 
-        # ── IaC type ──────────────────────────────────────────────────────
+        # classifies the manifest type
         iac_types[iac_type(content)] += 1
 
-        # ── PII breakdown ─────────────────────────────────────────────────
+        # checks which PII types are present in the file
         for name, pat in PII_PATTERNS.items():
             if pat.search(content):
                 pii_by_type[name] += 1
 
-        # ── Filter ────────────────────────────────────────────────────────
         ok, reason = passes_filter(row, CFG)
         if not ok:
             filter_drops[reason] += 1
             continue
 
-        # Re-validate after redaction (mirrors process_row behaviour)
+        # re-validating after redaction
         cleaned = redact(content, REDACTORS)
         try:
             yaml.safe_load(cleaned)
@@ -95,7 +90,7 @@ for chunk_path in tqdm(chunks, desc="Scanning chunks"):
 
         filter_pass += 1
 
-        # ── Wrap + validate round-trip ────────────────────────────────────
+        # wraping into tool call format and testing
         wrapped = wrap(cleaned)
         try:
             parsed   = json.loads(wrapped)
@@ -120,13 +115,13 @@ for chunk_path in tqdm(chunks, desc="Scanning chunks"):
         except Exception as e:
             wrap_fail += 1
 
-# ── Report ────────────────────────────────────────────────────────────────────
+# displaying the report
 W = 62
 print(f"\n{'═'*W}")
 print(f"  DIAGNOSTIC REPORT  ({len(chunks)} chunks)")
 print(f"{'═'*W}")
 
-# 1. Volume
+# shows how many rows passed the filters
 print(f"\n{'─'*W}")
 print(f"  1. VOLUME")
 print(f"{'─'*W}")
@@ -137,7 +132,7 @@ print(f"\n  Drop breakdown:")
 for reason, n in filter_drops.most_common():
     print(f"    {reason:<30} {n:>6,}  ({n/total*100:.1f}%)")
 
-# 2. IaC type distribution
+# displays what types of manifests are in the data
 print(f"\n{'─'*W}")
 print(f"  2. IaC TYPE DISTRIBUTION  (all {total:,} rows)")
 print(f"{'─'*W}")
@@ -145,7 +140,7 @@ for typ, n in iac_types.most_common():
     bar = "█" * int(n / total * 40)
     print(f"  {typ:<22} {n:>6,}  {n/total*100:5.1f}%  {bar}")
 
-# 3. Keyword hits
+# checks and shows which ML keywords appear most often
 print(f"\n{'─'*W}")
 print(f"  3. KEYWORD HITS  (occurrences across all {total:,} rows)")
 print(f"{'─'*W}")
@@ -158,23 +153,23 @@ for cat, counter in kw_totals.items():
         print(f"    {kw:<35} {n:>8,}")
 print(f"\n  Grand total keyword hits : {grand_total:,}")
 
-# 4. PII exposure
+# checking how many files contain PII
 print(f"\n{'─'*W}")
 print(f"  4. PII EXPOSURE  (files containing each pattern)")
 print(f"{'─'*W}")
 for name, n in pii_by_type.most_common():
     print(f"  {name:<15} {n:>6,} files  ({n/total*100:.1f}%)")
 
-# 5. Wrap / escaping
+# checking if the JSON wrapping worked correctly
 print(f"\n{'─'*W}")
 print(f"  5. JSON WRAP + ROUND-TRIP VALIDATION  (filter-passing rows only)")
 print(f"{'─'*W}")
 checked = wrap_ok + wrap_fail
-print(f"  Checked   : {checked:,}")
-print(f"  ✅ Valid   : {wrap_ok:,}  ({wrap_ok/checked*100:.1f}% of checked)" if checked else "  (none)")
-print(f"  ❌ Invalid : {wrap_fail:,}" if wrap_fail else "  ❌ Invalid : 0")
+print(f" Checked   : {checked:,}")
+print(f" Valid   : {wrap_ok:,}  ({wrap_ok/checked*100:.1f}% of checked)" if checked else "  (none)")
+print(f" Invalid : {wrap_fail:,}" if wrap_fail else "  Invalid : 0")
 
-# 6. Sample records spot-check
+# displaying sample records
 print(f"\n{'─'*W}")
 print(f"  6. SAMPLE TRAINING RECORDS (first {len(sample_records)})")
 print(f"{'─'*W}")
@@ -184,9 +179,9 @@ for i, r in enumerate(sample_records, 1):
     print(f"      Manifest: {r['manifest_preview']} …")
     print(f"      JSON ✅  YAML ✅")
 
-# 7. Spec compliance
+# checking and displaying compliance
 print(f"\n{'═'*W}")
-print(f"  7. SPEC COMPLIANCE — The Stack: Payload Layer")
+print(f"  7. COMPLIANCE — The Stack: Payload Layer")
 print(f"{'═'*W}")
 
 checks = {

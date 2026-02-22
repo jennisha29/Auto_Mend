@@ -1,6 +1,4 @@
 """
-schema_stats.py
-────────────────
 Validates every training record in training_records.jsonl:
   - Required fields present (messages, _meta)
   - messages has exactly 2 turns (user + assistant)
@@ -30,8 +28,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Schema rules ──────────────────────────────────────────────────────────────
-
+# schema rules
 REQUIRED_TOP_KEYS  = {"messages", "_meta"}
 REQUIRED_META_KEYS = {"hexsha", "path", "size", "licenses"}
 PII_PATTERNS = [
@@ -40,35 +37,37 @@ PII_PATTERNS = [
     re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"),
 ]
 
-
 def validate_record(record: dict) -> tuple[bool, list[str]]:
     """
-    Returns (ok, list_of_violations).
-    Empty violations list means the record is fully valid.
+    Check one training record against all validation rules.
+    Returns (True, []) if valid.
+    Returns (False, [list of what's wrong]) if invalid.
     """
     violations: list[str] = []
 
-    # Top-level keys
+    # check if the top level keys exist
     for k in REQUIRED_TOP_KEYS:
         if k not in record:
             violations.append(f"missing_top_key:{k}")
 
-    # Messages structure
+    # checks the messages structure
     msgs = record.get("messages", [])
     if len(msgs) != 2:
         violations.append(f"wrong_message_count:{len(msgs)}")
     else:
+        # first message must be from the user
         if msgs[0].get("role") != "user":
             violations.append("first_role_not_user")
+        # second message must be from the assistant
         if msgs[1].get("role") != "assistant":
             violations.append("second_role_not_assistant")
 
-        # Prompt must be non-empty string
+        # prompt must be non-empty string
         prompt = msgs[0].get("content", "")
         if not isinstance(prompt, str) or not prompt.strip():
             violations.append("empty_prompt")
 
-        # Assistant content must be valid JSON
+        # assistant content must be valid JSON
         assistant = msgs[1].get("content", "")
         try:
             parsed = json.loads(assistant)
@@ -77,32 +76,32 @@ def validate_record(record: dict) -> tuple[bool, list[str]]:
             parsed = None
 
         if parsed is not None:
-            # Must have correct tool call structure
+
+            # must have correct tool call structure
             if parsed.get("tool") != "apply_manifest":
                 violations.append("wrong_tool_name")
             manifest = parsed.get("params", {}).get("manifest_content", "")
             if not manifest:
                 violations.append("empty_manifest_content")
             else:
-                # Manifest must be valid YAML
+                # manifest must be valid YAML
                 try:
                     yaml.safe_load(manifest)
                 except yaml.YAMLError as e:
                     violations.append(f"manifest_invalid_yaml:{e}")
 
-                # PII check — should have been redacted
+                # PII check should have been redacted
                 for pat in PII_PATTERNS:
                     if pat.search(manifest):
                         violations.append(f"pii_leaked:{pat.pattern[:20]}")
 
-    # Meta block
+    # checks if the metadata block has all required keys
     meta = record.get("_meta", {})
     for k in REQUIRED_META_KEYS:
         if k not in meta:
             violations.append(f"missing_meta_key:{k}")
 
     return len(violations) == 0, violations
-
 
 def compute_stats(records: list[dict]) -> dict:
     """Compute aggregate statistics over all valid records."""
@@ -138,9 +137,6 @@ def compute_stats(records: list[dict]) -> dict:
         "manifest_length_chars": _stats(manifest_lengths),
         "source_file_size":      _stats(sizes),
     }
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def run_validation() -> dict:
     import yaml as _yaml

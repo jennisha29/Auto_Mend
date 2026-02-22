@@ -1,10 +1,7 @@
 """
-dags/iac_pipeline_dag.py
-─────────────────────────
-Manual-trigger DAG for the IaC Payload Layer pipeline.
-Uses PythonOperator to call each script's main entry point directly.
+This DAG runs the full data pipeline manually.
 
-Trigger:
+How to trigger:
   UI  → DAGs → iac_payload_pipeline → ▶ Trigger DAG
   CLI → airflow dags trigger iac_payload_pipeline
 """
@@ -14,7 +11,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-# Ensure repo root is on the path for all tasks
+# ensures repo root is on the path for all tasks
 sys.path.insert(0, "/opt/airflow")
 
 default_args = {
@@ -23,15 +20,13 @@ default_args = {
     "retry_delay": timedelta(minutes=2),
 }
 
-
-# ── Task callables ─────────────────────────────────────────────────────────────
-# Each function imports and calls the script's own entry point.
-# Importing inside the function keeps the DAG file lightweight at parse time.
+# task callables
+# each function imports and calls the script's own entry point.
 
 def task_download(**ctx):
     import os
     os.chdir("/opt/airflow")
-    # Pass HF token from Airflow Variable to huggingface_hub
+    # pass HF token from airflow variable to huggingface_hub
     token = ctx["var"]["value"].get("HF_TOKEN", "")
     if token:
         os.environ["HUGGING_FACE_HUB_TOKEN"] = token
@@ -42,6 +37,7 @@ def task_download(**ctx):
 def task_analyze(**ctx):
     import os
     os.chdir("/opt/airflow")
+     # runs the analysis script counts IaC types, keywords, PII rate, etc.
     from scripts.analyze.stack_iac_analysis import analyze
     analyze()
 
@@ -49,6 +45,7 @@ def task_analyze(**ctx):
 def task_preprocess(**ctx):
     import os
     os.chdir("/opt/airflow")
+    # runs the preprocess script filters, redacts PII, wraps into training format
     from scripts.preprocess.payload_pipeline import run
     run()
 
@@ -56,6 +53,7 @@ def task_preprocess(**ctx):
 def task_validate(**ctx):
     import os
     os.chdir("/opt/airflow")
+    # runs the validation script checks every training record is correctly formatted
     from scripts.validate.schema_stats import run_validation
     run_validation()
 
@@ -63,6 +61,7 @@ def task_validate(**ctx):
 def task_anomaly(**ctx):
     import os
     os.chdir("/opt/airflow")
+    # runs the anomaly check fires an alert if pass rate drops or PII leaks through
     from scripts.validate.anomaly_alerts import run_anomaly_check
     run_anomaly_check()
 
@@ -70,12 +69,12 @@ def task_anomaly(**ctx):
 def task_bias(**ctx):
     import os
     os.chdir("/opt/airflow")
+    # runs the bias detection checks if any manifest type is over or under-represented
+    # also writes a balanced version of the training data
     from scripts.validate.bias_detection import run_bias_detection
     run_bias_detection()
 
-
-# ── DAG ────────────────────────────────────────────────────────────────────────
-
+# this block creates the DAG and connects all the tasks in order
 with DAG(
     dag_id="iac_payload_pipeline",
     description="IaC Payload Layer: download → analyze → preprocess → validate → anomaly → bias",
@@ -85,7 +84,7 @@ with DAG(
     default_args=default_args,
     tags=["iac", "payload-layer", "ml-data"],
 ) as dag:
-
+    
     download = PythonOperator(
         task_id="download",
         python_callable=task_download,
@@ -128,5 +127,5 @@ with DAG(
         doc_md="Slice imbalance report → logs/bias_report.json",
     )
 
-    # ── Linear pipeline ────────────────────────────────────────────────────────
+    # runs tasks one after another in this exact order
     download >> analyze >> preprocess >> validate >> anomaly >> bias
