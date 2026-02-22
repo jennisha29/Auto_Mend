@@ -1,0 +1,169 @@
+{
+  "total_records": 43,
+  "min_slice_pct": 5.0,
+  "max_slice_pct": 40.0,
+  "imbalances_found": 6,
+  "imbalances": [
+    "[iac_type] Underrepresented (<5.0%): ['kserve', 'seldon']",
+    "[iac_type] Overrepresented (>40.0%): ['k8s_other']",
+    "[license] Overrepresented (>40.0%): ['apache-2.0']",
+    "[size_bucket] Overrepresented (>40.0%): ['<1KB']",
+    "[prompt_type] Underrepresented (<5.0%): ['config', 'gpu', 'deploy', 'pipeline', 'secret']",
+    "[prompt_type] Overrepresented (>40.0%): ['fallback']"
+  ],
+  "slices": {
+    "iac_type": {
+      "k8s_config": {
+        "count": 7,
+        "pct_of_total": 16.28,
+        "mean_manifest_chars": 1096.6,
+        "underrepresented": false,
+        "overrepresented": false
+      },
+      "k8s_workload": {
+        "count": 5,
+        "pct_of_total": 11.63,
+        "mean_manifest_chars": 1891.2,
+        "underrepresented": false,
+        "overrepresented": false
+      },
+      "k8s_other": {
+        "count": 29,
+        "pct_of_total": 67.44,
+        "mean_manifest_chars": 6919.3,
+        "underrepresented": false,
+        "overrepresented": true
+      },
+      "kserve": {
+        "count": 1,
+        "pct_of_total": 2.33,
+        "mean_manifest_chars": 481.0,
+        "underrepresented": true,
+        "overrepresented": false
+      },
+      "seldon": {
+        "count": 1,
+        "pct_of_total": 2.33,
+        "mean_manifest_chars": 657.0,
+        "underrepresented": true,
+        "overrepresented": false
+      }
+    },
+    "license": {
+      "apache-2.0": {
+        "count": 35,
+        "pct_of_total": 81.4,
+        "mean_manifest_chars": 4950.5,
+        "underrepresented": false,
+        "overrepresented": true
+      },
+      "mit": {
+        "count": 8,
+        "pct_of_total": 18.6,
+        "mean_manifest_chars": 5707.9,
+        "underrepresented": false,
+        "overrepresented": false
+      }
+    },
+    "size_bucket": {
+      "<1KB": {
+        "count": 19,
+        "pct_of_total": 44.19,
+        "mean_manifest_chars": 512.4,
+        "underrepresented": false,
+        "overrepresented": true
+      },
+      "1-10KB": {
+        "count": 16,
+        "pct_of_total": 37.21,
+        "mean_manifest_chars": 2230.6,
+        "underrepresented": false,
+        "overrepresented": false
+      },
+      "10-100KB": {
+        "count": 8,
+        "pct_of_total": 18.6,
+        "mean_manifest_chars": 21688.0,
+        "underrepresented": false,
+        "overrepresented": false
+      }
+    },
+    "prompt_type": {
+      "config": {
+        "count": 2,
+        "pct_of_total": 4.65,
+        "mean_manifest_chars": 576.0,
+        "underrepresented": true,
+        "overrepresented": false
+      },
+      "gpu": {
+        "count": 1,
+        "pct_of_total": 2.33,
+        "mean_manifest_chars": 1843.0,
+        "underrepresented": true,
+        "overrepresented": false
+      },
+      "service": {
+        "count": 6,
+        "pct_of_total": 13.95,
+        "mean_manifest_chars": 13611.5,
+        "underrepresented": false,
+        "overrepresented": false
+      },
+      "fallback": {
+        "count": 29,
+        "pct_of_total": 67.44,
+        "mean_manifest_chars": 4469.2,
+        "underrepresented": false,
+        "overrepresented": true
+      },
+      "deploy": {
+        "count": 2,
+        "pct_of_total": 4.65,
+        "mean_manifest_chars": 1190.5,
+        "underrepresented": true,
+        "overrepresented": false
+      },
+      "pipeline": {
+        "count": 2,
+        "pct_of_total": 4.65,
+        "mean_manifest_chars": 780.5,
+        "underrepresented": true,
+        "overrepresented": false
+      },
+      "secret": {
+        "count": 1,
+        "pct_of_total": 2.33,
+        "mean_manifest_chars": 715.0,
+        "underrepresented": true,
+        "overrepresented": false
+      }
+    }
+  },
+  "mitigation": {
+    "strategy": "capped_downsample_on_iac_type",
+    "max_slice_pct": 40.0,
+    "random_seed": 42,
+    "original_total": 43,
+    "balanced_total": 30,
+    "dropped": 13,
+    "kept_by_iac_type": {
+      "k8s_config": 7,
+      "k8s_workload": 5,
+      "k8s_other": 16,
+      "kserve": 1,
+      "seldon": 1
+    },
+    "dropped_by_iac_type": {
+      "k8s_other": 13
+    },
+    "keep_ratios": {
+      "k8s_config": 1.0,
+      "k8s_workload": 1.0,
+      "k8s_other": 0.5931,
+      "kserve": 1.0,
+      "seldon": 1.0
+    },
+    "output_path": "/Users/jennishachristinamartin/Auto_Mend/Data_Pipeline/data/processed/training_records_balanced.jsonl"
+  }
+}

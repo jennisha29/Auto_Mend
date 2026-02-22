@@ -1,0 +1,30 @@
+{
+  "total": 43,
+  "valid": 43,
+  "invalid": 0,
+  "pass_rate_pct": 100.0,
+  "violation_counts": {},
+  "statistics": {
+    "prompt_length_chars": {
+      "count": 43,
+      "min": 28,
+      "max": 145,
+      "mean": 61.5,
+      "median": 59
+    },
+    "manifest_length_chars": {
+      "count": 43,
+      "min": 222,
+      "max": 33458,
+      "mean": 5091.4,
+      "median": 1257
+    },
+    "source_file_size": {
+      "count": 43,
+      "min": 222,
+      "max": 33458,
+      "mean": 5093.9,
+      "median": 1257
+    }
+  }
+}

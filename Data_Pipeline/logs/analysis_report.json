@@ -1,0 +1,66 @@
+{
+  "total_rows": 20000,
+  "pii_files": {
+    "count": 3588,
+    "pct": 17.94
+  },
+  "iac_type_dist": {
+    "other": 18578,
+    "k8s_other": 750,
+    "k8s_config": 383,
+    "k8s_workload": 282,
+    "kserve": 4,
+    "seldon": 2,
+    "terraform": 1
+  },
+  "escape_difficulty": {
+    "easy": 19385,
+    "medium": 393,
+    "hard": 222
+  },
+  "size_distribution": {
+    "<1KB": 12508,
+    "1-10KB": 6431,
+    "10-100KB": 837,
+    ">100KB": 224
+  },
+  "field_null_pct": {},
+  "top_keywords": {
+    "ml_gpu": {
+      "gpu": 401,
+      "accelerator": 33
+    },
+    "kserve_seldon": {
+      "predictor": 12,
+      "kserve": 10,
+      "seldon": 6,
+      "inferenceservice": 3,
+      "seldondeployment": 1
+    },
+    "mlops": {
+      "pipeline": 1755,
+      "workflow": 1542,
+      "serving": 321,
+      "kubeflow": 60,
+      "inference": 57,
+      "mlflow": 23
+    }
+  },
+  "top_licenses": {
+    "mit": 11775,
+    "apache-2.0": 5577,
+    "cc-by-4.0": 1499,
+    "bsd-3-clause": 1002,
+    "unlicense": 574,
+    "cc0-1.0": 474,
+    "bsd-2-clause": 208,
+    "0bsd": 64,
+    "ecl-2.0": 53,
+    "rsa-md": 51,
+    "cc-by-3.0": 49,
+    "mit-0": 38,
+    "isc": 29,
+    "mulanpsl-1.0": 23,
+    "wtfpl": 23
+  }
+}

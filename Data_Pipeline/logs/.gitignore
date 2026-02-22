@@ -1,4 +1,10 @@
-/analysis_report.json
-/schema_report.json
-/anomaly_report.json
-/bias_report.json
+# Runtime logs — not committed
+*.log
+
+# Airflow task logs — not committed
+dag_id=*/
+dag_processor_manager/
+scheduler/
+
+# JSON reports are committed as DVC metrics
+# Do NOT ignore *.json here

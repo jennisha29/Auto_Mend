@@ -1,0 +1,11 @@
+{
+  "anomalies_found": 0,
+  "anomalies": [],
+  "thresholds_used": {
+    "min_pass_rate_pct": 80.0,
+    "max_violation_count": 50,
+    "max_pii_leak_count": 0,
+    "min_total_records": 10
+  },
+  "status": "PASS"
+}
